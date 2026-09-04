@@ -23,11 +23,13 @@ These are the initial functions for all remote types:
 
 ## Implementation
 
-Application uses `deno` with only 2 commands: 'init' to copy the template directory into the local remote, and 'start' to start in the current directory or a given one.
+Application is written in javascript using only `node`, no npm required. Readme explans how to run the code.
+Main function simply runs the application loading defaults. Also accepts 'init' command that copies the center template remote in the loaded directory, without running.
 File structure:
-- src/: main.ts (cli, config), runtime.ts (remotes, functions), horde.ts (backend hub connection)
-- templates/functions/: create_space.ts and clone_space.ts
-- templates/space_functions/: all space functions
+- src/: main.js (cli, config), runtime.js (remotes, functions), horde.js (backend hub connection)
+- templates/: center and space are template remotes, these are copied as '.remote' in new spaces and initializing the center
+- templates/center/functions: create_space.ts and functions/clone_space.ts
+- templates/space/functions: all space functions
 - spaces/: untracked directory where spaces are stored
 - readme.md
 - .remote/config.json: holds host, token, name
