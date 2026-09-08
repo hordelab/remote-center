@@ -59,8 +59,16 @@ export class Functions {
     return [...this.map.values()].map((f) => f.spec);
   }
 
+  names() {
+    return [...this.map.keys()];
+  }
+
   has(name) {
     return this.map.has(name);
+  }
+
+  spec(name) {
+    return this.map.get(name)?.spec;
   }
 
   async call(name, args, ctx) {
@@ -128,12 +136,13 @@ export class Watcher {
 
 // A named collection of functions in a directory, registered on the hub.
 export class Remote {
-  constructor({ horde, name, functionsDir, ctx = null, fallback = null }) {
+  constructor({ horde, name, functionsDir, ctx, centerFunctions = [], fallback }) {
     this.horde = horde;
     this.name = name;
     this.ctx = ctx;
-    this.fallback = fallback; // shared Functions instance (center functions)
     this.functions = new Functions(functionsDir);
+    this.centerFunctions = centerFunctions;
+    this.fallback = fallback;
     this.watcher = null;
   }
 
@@ -141,17 +150,34 @@ export class Remote {
   async register() {
     await this.functions.scan();
     try {
+      let functions = this.functions.specs();
+
+
+      // Extend functions list with center functions
+      for (const fname of this.centerFunctions) {
+        // don't override local functions (should override?)
+        //if (this.functions.has(fname)) continue;
+        if (this.fallback && this.fallback.has(fname)) {
+          functions.push(this.fallback.spec(fname));
+        } else {
+          console.error(`Remote ${this.name}: center function ${fname} not found`)
+        }
+      }
+      
       await this.horde.sendAction('remote-connect', {
         remotename: this.name,
-        functions: this.functions.specs(),
+        functions,
       });
-      console.log(`Registered remote '${this.name}' with ${this.functions.map.size} function(s)`);
+      console.log(`Registered remote '${this.name}' with ${functions.length} function(s) (${this.functions.map.size} defined)`);
     } catch (err) {
       console.error(`Failed to register remote '${this.name}': ${err.message}`);
       return false;
     }
     if (!this.watcher) {
-      this.watcher = new Watcher(this.functions.dir, () => this.register());
+      this.watcher = new Watcher(this.functions.dir, async () => {
+        await this.disconnect();
+        await this.register()
+      });
       this.watcher.start();
     }
     return true;

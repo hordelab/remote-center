@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'create_function',
+  name: 'create-function',
   description: 'Create a new function on this remote by writing a function module.',
   parameters: {
     type: 'object',

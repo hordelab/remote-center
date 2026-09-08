@@ -2,14 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'delete_file',
-  description: 'Delete a file (or directory) in the space.',
+  name: 'write-file',
+  description: 'Write text content to a file in the space, creating parent directories as needed.',
   parameters: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Path relative to the space directory.' },
+      path: { type: 'string', description: 'File path relative to the space directory.' },
+      content: { type: 'string', description: 'Text content to write.' },
     },
-    required: ['path'],
+    required: ['path', 'content'],
   },
 };
 
@@ -23,7 +24,7 @@ function resolveIn(base, relPath) {
 
 export default async function (args, ctx) {
   const file = resolveIn(ctx.dir, args.path);
-  if (!fs.existsSync(file)) throw new Error(`No such file: ${args.path}`);
-  fs.rmSync(file, { recursive: true });
-  return { deleted: args.path };
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, args.content ?? '');
+  return { written: args.path };
 }

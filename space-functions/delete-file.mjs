@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'read_file',
-  description: 'Read the text content of a file in the space.',
+  name: 'delete-file',
+  description: 'Delete a file (or directory) in the space.',
   parameters: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path relative to the space directory.' },
+      path: { type: 'string', description: 'Path relative to the space directory.' },
     },
     required: ['path'],
   },
@@ -22,5 +22,8 @@ function resolveIn(base, relPath) {
 }
 
 export default async function (args, ctx) {
-  return { content: fs.readFileSync(resolveIn(ctx.dir, args.path), 'utf8') };
+  const file = resolveIn(ctx.dir, args.path);
+  if (!fs.existsSync(file)) throw new Error(`No such file: ${args.path}`);
+  fs.rmSync(file, { recursive: true });
+  return { deleted: args.path };
 }

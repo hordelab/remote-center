@@ -2,15 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'write_file',
-  description: 'Write text content to a file in the space, creating parent directories as needed.',
+  name: 'read-file',
+  description: 'Read the text content of a file in the space.',
   parameters: {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path relative to the space directory.' },
-      content: { type: 'string', description: 'Text content to write.' },
     },
-    required: ['path', 'content'],
+    required: ['path'],
   },
 };
 
@@ -23,8 +22,5 @@ function resolveIn(base, relPath) {
 }
 
 export default async function (args, ctx) {
-  const file = resolveIn(ctx.dir, args.path);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, args.content ?? '');
-  return { written: args.path };
+  return { content: fs.readFileSync(resolveIn(ctx.dir, args.path), 'utf8') };
 }

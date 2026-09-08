@@ -10,7 +10,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Horde } from './horde.mjs';
-import { Remote, Watcher } from './runtime.mjs';
+import { Remote, Watcher, Functions } from './runtime.mjs';
 
 const APP_DIR = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TEMPLATES_DIR = path.join(APP_DIR, 'templates');
@@ -52,12 +52,21 @@ function addSpaceRemote(spaceName, dir) {
   const remoteName = `${CENTER_NAME}/${spaceName}`;
   let remote = REMOTES.get(remoteName);
   if (remote) return remote;
+  
+  // Resolve center functions for this space
+  let spaceConfig = APP_CONFIG.spaces?.[spaceName] || {};
+  let centerFunctions = spaceConfig.centerFunctions;
+  if (centerFunctions == null) {
+    centerFunctions = CENTER ? CENTER.spaceFunctions.names() : [];
+  }
+  
   remote = new Remote({
     horde: HORDE,
     name: remoteName,
     functionsDir: path.join(dir, '.remote', 'functions'),
     ctx: { dir, remoteName, spaceName, api: API },
-    fallback: CENTER.functions,
+    centerFunctions,
+    fallback: CENTER && CENTER.spaceFunctions,
   });
   REMOTES.set(remoteName, remote);
   return remote;
@@ -70,13 +79,29 @@ async function initSpace(spaceName, dir) {
     throw new Error(`Space directory does not exist: ${absoluteDir}`);
   }
 
+  const remoteDir = path.join(absoluteDir, '.remote');
+  if (!fs.existsSync(remoteDir)) {
+    fs.mkdirSync(remoteDir, { recursive: true });
+  }
+  
+  // Create empty functions directory
+  const functionsDir = path.join(remoteDir, 'functions');
+  if (!fs.existsSync(functionsDir)) {
+    fs.mkdirSync(functionsDir, { recursive: true });
+  }
+  
+  // Get center function names for this space
+  const spaceConfig = APP_CONFIG.spaces?.[spaceName] || {};
+  const centerFunctions = spaceConfig.centerFunctions || [];
+  
+  // Update config with center functions
+  APP_CONFIG = { ...APP_CONFIG, spaces: { ...APP_CONFIG.spaces, [spaceName]: { path: absoluteDir, centerFunctions } } };
+  fs.writeFileSync(path.join(WORK_DIR, '.remote', 'config.json'), JSON.stringify(APP_CONFIG, null, 2) + '\n');
+
   if (REMOTES != null) {
     const remote = addSpaceRemote(spaceName, absoluteDir);
     if (!(await remote.register())) throw new Error('Failed to register space with the hub');
   }
-
-  APP_CONFIG = { ...APP_CONFIG, spaces: { ...APP_CONFIG.spaces, [spaceName]: { path: absoluteDir } } };
-  fs.writeFileSync(path.join(WORK_DIR, '.remote', 'config.json'), JSON.stringify(APP_CONFIG, null, 2) + '\n');
 
   console.log(`Initialized space '${spaceName}' at ${absoluteDir}`);
 }
@@ -87,9 +112,6 @@ async function createSpace(spaceName, dir = null) {
   const absoluteDir = path.resolve(WORK_DIR, finalDir);
   if (fs.existsSync(absoluteDir)) throw new Error(`Space directory already exists: ${absoluteDir}`);
   fs.mkdirSync(absoluteDir, { recursive: true });
-
-  fs.cpSync(path.join(TEMPLATES_DIR, 'space'), path.join(absoluteDir, '.remote'), { recursive: true });
-  fs.writeFileSync(path.join(absoluteDir, '.remote', 'config.json'), JSON.stringify({ name: spaceName }, null, 2) + '\n');
 
   await initSpace(spaceName, absoluteDir);
 }
@@ -200,9 +222,10 @@ function init(dir = '.') {
 
 // --- run ---
 
-function run() {
+async function run() {
   const token = process.env.HORDE_TOKEN || APP_CONFIG.token || null;
   const spacesDir = path.join(WORK_DIR, 'spaces');
+  const spaceFunctionsDir = path.join(WORK_DIR, 'space-functions');
 
   console.log(`Running remote-center '${CENTER_NAME}' on ${HOST}, working path ${WORK_DIR}`);
   if (!token) console.warn('No token set in .remote/config.json');
@@ -221,6 +244,15 @@ function run() {
     ctx: { dir: WORK_DIR, remoteName: CENTER_NAME, spaceName: null, api: API },
   });
   REMOTES = new Map([[CENTER_NAME, CENTER]]);
+
+  // Load space functions
+  CENTER.spaceFunctions = new Functions(spaceFunctionsDir);
+  await CENTER.spaceFunctions.scan();
+
+  new Watcher(spaceFunctionsDir, async () => {
+    CENTER.spaceFunctions.scan();
+    // TODO: Reconnect all space remotes
+  }).start();
 
   reconcileSpaces();
   new Watcher(spacesDir, () => reconcileSpaces()).start();

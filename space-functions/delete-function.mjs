@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'delete_function',
+  name: 'delete-function',
   description: 'Delete a function module from this remote.',
   parameters: {
     type: 'object',

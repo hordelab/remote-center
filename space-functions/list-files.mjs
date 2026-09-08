@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const spec = {
-  name: 'list_files',
+  name: 'list-files',
   description: 'List every file in the space, as paths relative to the space directory.',
   parameters: { type: 'object', properties: {} },
 };

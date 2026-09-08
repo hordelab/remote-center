@@ -158,6 +158,6 @@ export class Horde {
     }
 
     if (packet.error) console.error('Hub error:', packet.error);
-    else console.warn('Ignored hub message:', raw);
+    else console.warn('Ignored hub message:', packet.action);
   }
 }
