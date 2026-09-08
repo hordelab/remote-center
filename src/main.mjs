@@ -208,18 +208,19 @@ function run() {
   if (!token) console.warn('No token set in .remote/config.json');
 
   HORDE = new Horde({ host: HOST, token });
-  CENTER = new Remote({
-    horde: HORDE,
-    name: CENTER_NAME,
-    functionsDir: path.join(WORK_DIR, '.remote', 'functions'),
-  });
-  REMOTES = new Map([[CENTER_NAME, CENTER]]);
-
   API = {
     createSpace,
     cloneSpace,
     listSpaces: () => [...REMOTES.keys()].filter((n) => n !== CENTER_NAME),
   };
+
+  CENTER = new Remote({
+    horde: HORDE,
+    name: CENTER_NAME,
+    functionsDir: path.join(WORK_DIR, '.remote', 'functions'),
+    ctx: { dir: WORK_DIR, remoteName: CENTER_NAME, spaceName: null, api: API },
+  });
+  REMOTES = new Map([[CENTER_NAME, CENTER]]);
 
   reconcileSpaces();
   new Watcher(spacesDir, () => reconcileSpaces()).start();
