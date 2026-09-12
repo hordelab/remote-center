@@ -2,6 +2,8 @@
 // Modeled on the browser client in reference/backend.js: nonce-tracked actions,
 // action listeners, orphan handlers for the auth response, auto-reconnect.
 
+//import WebSocket from 'ws';
+
 export class Horde {
   constructor({ host, token = null }) {
     this.host = host;
@@ -14,6 +16,7 @@ export class Horde {
     this.connectListeners = [];
     this.reconnectTimeout = null;
     this.stopped = false;
+    this.pingTimeout = null;          // Tracks the heartbeat interval
   }
 
   connect() {
@@ -44,6 +47,9 @@ export class Horde {
         console.error('Error during hub login:', err);
         socket.close();
       }
+
+      // Start heartbeat
+      this.schedulePing();
     };
 
     socket.onmessage = (event) => {
@@ -57,6 +63,7 @@ export class Horde {
         console.log('Disconnected from hub. Reconnecting in 1s...');
         this.reconnectTimeout = setTimeout(() => this.connect(), 1000);
       }
+      this.pingTimeout = null;
     };
 
     socket.onerror = (event) => {
@@ -67,6 +74,7 @@ export class Horde {
   close() {
     this.stopped = true;
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    if (this.pingTimeout) clearTimeout(this.pingTimeout);
     if (this.socket) {
       this.socket.onclose = null;
       this.socket.close();
@@ -159,5 +167,21 @@ export class Horde {
 
     if (packet.error) console.error('Hub error:', packet.error);
     else console.warn('Ignored hub message:', packet.action);
+  }
+
+  schedulePing() {
+    if (this.pingTimeout) clearTimeout(this.pingTimeout);
+    this.pingTimeout = setTimeout(() => {
+      if (this.stopped) {
+        this.pingTimeout = null;
+        return;
+      }
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        this.sendAction("ping");
+        this.schedulePing();
+      } else {
+        this.pingTimeout = null;
+      }
+    }, 30_000);
   }
 }
