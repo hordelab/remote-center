@@ -13,6 +13,7 @@ export class Functions {
   constructor(dir) {
     this.dir = dir;
     this.map = new Map(); // spec.name -> { spec, fn, file }
+    this.whitelist = null;
   }
 
   async scan() {
@@ -44,6 +45,7 @@ export class Functions {
         if (typeof mod.default !== 'function') {
           throw new Error('module must export a default function');
         }
+        if (this.whitelist && !this.whitelist.includes(spec.name)) continue;
         if (map.has(spec.name)) continue;
         map.set(spec.name, { spec, fn: mod.default, file });
       } catch (err) {
@@ -136,11 +138,11 @@ export class Watcher {
 
 // A named collection of functions in a directory, registered on the hub.
 export class Remote {
-  constructor({ horde, name, functionsDir, ctx, centerFunctions = [], fallback }) {
+  constructor({ horde, name, functions, ctx, centerFunctions = [], fallback }) {
     this.horde = horde;
     this.name = name;
     this.ctx = ctx;
-    this.functions = new Functions(functionsDir);
+    this.functions = functions;
     this.centerFunctions = centerFunctions;
     this.fallback = fallback;
     this.watcher = null;

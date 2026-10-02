@@ -20,6 +20,7 @@ const DEFAULT_NAME = 'remote-center';
 // Global runtime state
 let WORK_DIR = null;
 let APP_CONFIG = null;
+let SPACES = null;
 let HOST = null;
 let CENTER_NAME = null;
 let HORDE = null;
@@ -29,10 +30,15 @@ let API = null;
 
 // --- config loading ---
 
-function loadConfig() {
-  if (!WORK_DIR) WORK_DIR = path.resolve(process.cwd());
+function loadCenter(dir) {
+  WORK_DIR = dir;
+  APP_CONFIG = loadJson('.remote', 'config.json');
+  SPACES = loadJson('spaces.json');
+}
+
+function loadJson (...segments) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(WORK_DIR, '.remote', 'config.json'), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(WORK_DIR, ...segments), 'utf8'));
   } catch {
     return {};
   }
@@ -54,18 +60,22 @@ function addSpaceRemote(spaceName, dir) {
   if (remote) return remote;
   
   // Resolve center functions for this space
-  let spaceConfig = APP_CONFIG.spaces?.[spaceName] || {};
+  let spaceConfig = SPACES?.[spaceName] || {};
   let centerFunctions = spaceConfig.centerFunctions;
   if (centerFunctions == null) {
     centerFunctions = CENTER ? CENTER.spaceFunctions.names() : [];
   }
   
+  let functions = new Functions(path.join(dir, '.remote', 'functions'));
+  if (spaceConfig.functions) {
+    functions.whitelist = spaceConfig.functions;
+  }
+
   remote = new Remote({
     horde: HORDE,
     name: remoteName,
-    functionsDir: path.join(dir, '.remote', 'functions'),
     ctx: { dir, remoteName, spaceName, api: API },
-    centerFunctions,
+    functions, centerFunctions,
     fallback: CENTER && CENTER.spaceFunctions,
   });
   REMOTES.set(remoteName, remote);
@@ -91,12 +101,12 @@ async function initSpace(spaceName, dir) {
   }
   
   // Get center function names for this space
-  const spaceConfig = APP_CONFIG.spaces?.[spaceName] || {};
+  const spaceConfig = SPACES?.[spaceName] || {};
   const centerFunctions = spaceConfig.centerFunctions || [];
   
   // Update config with center functions
-  APP_CONFIG = { ...APP_CONFIG, spaces: { ...APP_CONFIG.spaces, [spaceName]: { path: absoluteDir, centerFunctions } } };
-  fs.writeFileSync(path.join(WORK_DIR, '.remote', 'config.json'), JSON.stringify(APP_CONFIG, null, 2) + '\n');
+  SPACES[spaceName] = { path: absoluteDir, centerFunctions };
+  fs.writeFileSync(path.join(WORK_DIR, '.spaces.json'), JSON.stringify(SPACES, null, 2) + '\n');
 
   if (REMOTES != null) {
     const remote = addSpaceRemote(spaceName, absoluteDir);
@@ -148,7 +158,7 @@ async function cloneSpace(source, newName, dir = null) {
 }
 
 function reconcileSpaces() {
-  const definedSpaces = APP_CONFIG.spaces || {};
+  const definedSpaces = SPACES || {};
   const present = new Set();
 
   for (const [spaceName, spaceConfig] of Object.entries(definedSpaces)) {
@@ -240,7 +250,7 @@ async function run() {
   CENTER = new Remote({
     horde: HORDE,
     name: CENTER_NAME,
-    functionsDir: path.join(WORK_DIR, '.remote', 'functions'),
+    functions: new Functions(path.join(WORK_DIR, '.remote', 'functions')),
     ctx: { dir: WORK_DIR, remoteName: CENTER_NAME, spaceName: null, api: API },
   });
   REMOTES = new Map([[CENTER_NAME, CENTER]]);
@@ -274,17 +284,8 @@ async function run() {
 
 // --- entry point ---
 
-async function mainPromise (p) {
-  try {
-    await p;
-  } catch (e) {
-    console.error(e.stack);
-    process.exit(1);
-  }
-}
+loadCenter(path.resolve(process.cwd()));
 
-WORK_DIR = path.resolve(process.cwd());
-APP_CONFIG = loadConfig();
 HOST = process.env.HORDE_HOST || APP_CONFIG.host || DEFAULT_HOST;
 CENTER_NAME = APP_CONFIG.name || DEFAULT_NAME;
 
@@ -319,4 +320,13 @@ if (command === 'init') {
   process.exit(1);
 } else {
   mainPromise(run());
+}
+
+async function mainPromise (p) {
+  try {
+    await p;
+  } catch (e) {
+    console.error(e.stack);
+    process.exit(1);
+  }
 }

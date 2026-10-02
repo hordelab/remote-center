@@ -1,2 +1,6 @@
-spaces/
+node_modules
+package-lock.json
+
 .remote/
+spaces/
+spaces.json
